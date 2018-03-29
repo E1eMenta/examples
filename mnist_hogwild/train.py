@@ -1,11 +1,12 @@
 import os
 import torch
-import torch.optim as optim
+
 import torch.nn.functional as F
 from torch.autograd import Variable
 from torchvision import datasets, transforms
 
-def train(rank, args, model):
+def train(rank, args, model, optimizer):
+    model = model.cuda(rank)
     torch.manual_seed(args.seed + rank)
 
     train_loader = torch.utils.data.DataLoader(
@@ -22,24 +23,24 @@ def train(rank, args, model):
                     ])),
         batch_size=args.batch_size, shuffle=True, num_workers=1)
 
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+
     for epoch in range(1, args.epochs + 1):
-        train_epoch(epoch, args, model, train_loader, optimizer)
-        test_epoch(model, test_loader)
+        train_epoch(epoch, args, model, train_loader, optimizer,rank)
+        # test_epoch(model, test_loader)
 
 
-def train_epoch(epoch, args, model, data_loader, optimizer):
+def train_epoch(epoch, args, model, data_loader, optimizer,rank):
     model.train()
     pid = os.getpid()
     for batch_idx, (data, target) in enumerate(data_loader):
-        data, target = Variable(data), Variable(target)
+        data, target = Variable(data.cuda(rank)), Variable(target.cuda(rank))
         optimizer.zero_grad()
         output = model(data)
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % args.log_interval == 0:
-            print('{}\tTrain Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+            print('gpu{} pid{}\tTrain Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(rank,
                 pid, epoch, batch_idx * len(data), len(data_loader.dataset),
                 100. * batch_idx / len(data_loader), loss.data[0]))
 

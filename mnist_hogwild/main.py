@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.multiprocessing as mp
+import torch.optim as optim
 
 from train import train
 
@@ -42,9 +43,10 @@ class Net(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.dropout(x, training=self.training)
         x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+        return F.log_softmax(x)
 
 if __name__ == '__main__':
+    torch.multiprocessing.set_start_method("spawn")
     args = parser.parse_args()
 
     torch.manual_seed(args.seed)
@@ -53,8 +55,10 @@ if __name__ == '__main__':
     model.share_memory() # gradients are allocated lazily, so they are not shared here
 
     processes = []
+    print(args.num_processes)
+    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
     for rank in range(args.num_processes):
-        p = mp.Process(target=train, args=(rank, args, model))
+        p = mp.Process(target=train, args=(rank, args, model, optimizer))
         p.start()
         processes.append(p)
     for p in processes:
